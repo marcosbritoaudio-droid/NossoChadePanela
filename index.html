@@ -28,9 +28,12 @@
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: var(--branco); padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; position: relative; }
         .fechar-modal { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; }
+        #status-firebase { text-align: center; padding: 10px; font-size: 0.85rem; color: #888; margin-bottom: 10px; }
     </style>
 </head>
 <body>
+
+<div id="status-firebase">⏳ Carregando dados...</div>
 
 <div class="container">
     <header>
@@ -40,24 +43,22 @@
 
     <section>
         <h2>Confirmação de Presença (RSVP)</h2>
-        <form id="form-rsvp" onsubmit="salvarRSVP(event)">
-            <div class="form-group">
-                <label>Nome Completo</label>
-                <input type="text" id="nome-rsvp" required placeholder="Seu nome">
-            </div>
-            <div class="form-group">
-                <label>Telefone de Contato</label>
-                <input type="tel" id="tel-rsvp" required placeholder="(00) 00000-0000">
-            </div>
-            <div class="form-group">
-                <label>Você irá ao evento?</label>
-                <select id="presenca" required>
-                    <option value="Sim, com certeza!">Sim, com certeza!</option>
-                    <option value="Não poderei comparecer">Não poderei comparecer</option>
-                </select>
-            </div>
-            <button type="submit">Confirmar Presença</button>
-        </form>
+        <div class="form-group">
+            <label>Nome Completo</label>
+            <input type="text" id="nome-rsvp" placeholder="Seu nome">
+        </div>
+        <div class="form-group">
+            <label>Telefone de Contato</label>
+            <input type="tel" id="tel-rsvp" placeholder="(00) 00000-0000">
+        </div>
+        <div class="form-group">
+            <label>Você irá ao evento?</label>
+            <select id="presenca">
+                <option value="Sim, com certeza!">Sim, com certeza!</option>
+                <option value="Não poderei comparecer">Não poderei comparecer</option>
+            </select>
+        </div>
+        <button onclick="salvarRSVP()">Confirmar Presença</button>
     </section>
 
     <section>
@@ -71,42 +72,57 @@
         <span class="fechar-modal" onclick="fecharModal()">&times;</span>
         <h3 style="color: var(--marsala); margin-bottom: 15px;">Confirmar Escolha</h3>
         <p id="modal-texto-presente" style="margin-bottom: 15px; font-weight: bold;"></p>
-        <form id="form-escolha" onsubmit="confirmarReserva(event)">
-            <input type="hidden" id="modal-item-id">
-            <div class="form-group">
-                <label>Seu Nome</label>
-                <input type="text" id="nome-convidado" required placeholder="Digite seu nome">
-            </div>
-            <div class="form-group">
-                <label>Seu Telefone</label>
-                <input type="tel" id="tel-convidado" required placeholder="(00) 00000-0000">
-            </div>
-            <button type="submit" style="width: 100%;">Garantir este Presente</button>
-        </form>
+        <div class="form-group">
+            <label>Seu Nome</label>
+            <input type="text" id="nome-convidado" placeholder="Digite seu nome">
+        </div>
+        <div class="form-group">
+            <label>Seu Telefone</label>
+            <input type="tel" id="tel-convidado" placeholder="(00) 00000-0000">
+        </div>
+        <input type="hidden" id="modal-item-id">
+        <button onclick="confirmarReserva()" style="width: 100%;">Garantir este Presente</button>
     </div>
 </div>
 
-<script>
-    let presentes = [];
+<!-- Firebase SDK -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    window.onload = function() {
-        renderizarLista();
+    // ============================================================
+    // 🔧 COLE AQUI AS CONFIGURAÇÕES DO SEU PROJETO FIREBASE
+    // ============================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyBgLn5CQF9P1X0wV4t2KS_vHavZuFqBifI",
+        authDomain: "chadepanela-40493.firebaseapp.com",
+        projectId: "chadepanela-40493",
+        storageBucket: "chadepanela-40493.firebasestorage.app",
+        messagingSenderId: "789175256406",
+        appId: "1:789175256406:web:210263dfb8de14129142f7"
     };
+    // ============================================================
 
-    // ESCUTADOR AUTOMÁTICO DE MUDANÇAS: Atualiza a lista na hora se você mudar algo no admin.html
-    window.addEventListener('storage', function(event) {
-        if (event.key === 'presentes_casamento') {
-            renderizarLista();
-        }
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    document.getElementById('status-firebase').textContent = '✅ Conectado ao banco de dados';
+    setTimeout(() => document.getElementById('status-firebase').style.display = 'none', 3000);
+
+    // Escuta em tempo real a coleção de presentes
+    const presentesRef = collection(db, "presentes");
+    onSnapshot(presentesRef, (snapshot) => {
+        const presentes = [];
+        snapshot.forEach(doc => presentes.push({ firestoreId: doc.id, ...doc.data() }));
+        renderizarLista(presentes);
     });
 
-    function renderizarLista() {
-        presentes = JSON.parse(localStorage.getItem('presentes_casamento')) || [];
+    function renderizarLista(presentes) {
         const container = document.getElementById('lista-container');
         container.innerHTML = "";
 
-        if(presentes.length === 0) {
-            container.innerHTML = `<li style='color:#888; font-style:italic;'>A lista de presentes está vazia... Adicione itens no painel de administrador.</li>`;
+        if (presentes.length === 0) {
+            container.innerHTML = `<li style='color:#888; font-style:italic; padding:10px;'>A lista de presentes está vazia...</li>`;
             return;
         }
 
@@ -115,70 +131,79 @@
             const disponiveis = item.quantidade - totalReservado;
             const li = document.createElement('li');
 
-            if(disponiveis <= 0) {
+            if (disponiveis <= 0) {
                 li.className = "item-presente indisponivel";
                 li.innerHTML = `<span>${item.nome} <span class="qtd-badge">Esgotado</span></span><button class="btn-indisponivel" disabled>Indisponível</button>`;
             } else {
                 li.className = "item-presente";
-                li.innerHTML = `<span>${item.nome} <span class="qtd-badge">Restam ${disponiveis}</span></span><button onclick="abrirModal(${item.id}, '${item.nome}')">Escolher</button>`;
+                li.innerHTML = `<span>${item.nome} <span class="qtd-badge">Restam ${disponiveis}</span></span><button onclick="window._abrirModal('${item.firestoreId}', '${item.nome.replace(/'/g, "\\'")}')">Escolher</button>`;
             }
             container.appendChild(li);
         });
     }
 
-    function abrirModal(id, nome) {
+    // Expõe funções para o HTML
+    window._abrirModal = function(id, nome) {
         document.getElementById('modal-presente').style.display = 'flex';
-        document.getElementById('modal-texto-presente').innerText = `Você escolher: ${nome}`;
+        document.getElementById('modal-texto-presente').innerText = `Você escolheu: ${nome}`;
         document.getElementById('modal-item-id').value = id;
-    }
+    };
 
-    function fecharModal() {
-        document.getElementById('modal-presente').style.display = 'none';
-        document.getElementById('form-escolha').reset();
-    }
-
-    function confirmarReserva(event) {
-        event.preventDefault();
-        const id = parseInt(document.getElementById('modal-item-id').value);
+    window.confirmarReserva = async function() {
+        const id = document.getElementById('modal-item-id').value;
         const nomeConvidado = document.getElementById('nome-convidado').value.trim();
         const telConvidado = document.getElementById('tel-convidado').value.trim();
 
-        presentes = JSON.parse(localStorage.getItem('presentes_casamento')) || [];
-        const itemIndex = presentes.findIndex(item => item.id === id);
-        
-        if(itemIndex !== -1) {
-            let item = presentes[itemIndex];
-            if(!item.escolhas) item.escolhas = [];
-            
-            const disponiveis = item.quantidade - item.escolhas.length;
-            if(disponiveis <= 0) {
-                alert("Ops! Alguém escolheu este presente segundos antes.");
-                fecharModal();
-                renderizarLista();
-                return;
-            }
-
-            item.escolhas.push({ por: nomeConvidado, telephone: telConvidado });
-            localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
-            renderizarLista();
-            alert(`Obrigado ${nomeConvidado}! Presente reservado.`);
-            fecharModal();
+        if (!nomeConvidado || !telConvidado) {
+            alert("Por favor, preencha seu nome e telefone.");
+            return;
         }
-    }
 
-    function salvarRSVP(event) {
-        event.preventDefault();
+        const itemRef = doc(db, "presentes", id);
+        const itemSnap = await getDoc(itemRef);
+
+        if (!itemSnap.exists()) return alert("Presente não encontrado.");
+
+        const item = itemSnap.data();
+        const disponiveis = item.quantidade - (item.escolhas ? item.escolhas.length : 0);
+
+        if (disponiveis <= 0) {
+            alert("Ops! Alguém escolheu este presente segundos antes.");
+            fecharModal();
+            return;
+        }
+
+        await updateDoc(itemRef, {
+            escolhas: arrayUnion({ por: nomeConvidado, telefone: telConvidado })
+        });
+
+        alert(`Obrigado ${nomeConvidado}! Presente reservado com sucesso! 🎉`);
+        fecharModal();
+    };
+
+    window.salvarRSVP = async function() {
         const nome = document.getElementById('nome-rsvp').value.trim();
         const telefone = document.getElementById('tel-rsvp').value.trim();
         const presenca = document.getElementById('presenca').value;
 
-        let rsvps = JSON.parse(localStorage.getItem('rsvps_casamento')) || [];
-        rsvps.push({ nome, telefone, presenca });
-        localStorage.setItem('rsvps_casamento', JSON.stringify(rsvps));
+        if (!nome || !telefone) {
+            alert("Por favor, preencha seu nome e telefone.");
+            return;
+        }
 
-        alert("Presença confirmada!");
-        document.getElementById('form-rsvp').reset();
-    }
+        await addDoc(collection(db, "rsvps"), { nome, telefone, presenca, data: new Date().toISOString() });
+
+        alert("Presença confirmada! Obrigado! 🎊");
+        document.getElementById('nome-rsvp').value = "";
+        document.getElementById('tel-rsvp').value = "";
+    };
+
+    window.fecharModal = function() {
+        document.getElementById('modal-presente').style.display = 'none';
+        document.getElementById('nome-convidado').value = "";
+        document.getElementById('tel-convidado').value = "";
+        document.getElementById('modal-item-id').value = "";
+    };
 </script>
 </body>
 </html>

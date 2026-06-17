@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Suzana & Marcos</title>
+    <style>
+        :root { 
+            --marsala: #800020; 
+            --marsala-hover: #5A0016; 
+            --branco: #ffffff; 
+            --prata-claro: #f4f4f6; 
+            --prata-borda: #cccccc; 
+            --texto-escuro: #333333;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--prata-claro); padding: 20px; color: var(--texto-escuro); }
+        .container { max-width: 1000px; margin: 0 auto; background: var(--branco); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid var(--prata-borda); }
+        header { text-align: center; margin-bottom: 40px; }
+        h2 { color: var(--marsala); margin-bottom: 20px; border-left: 4px solid var(--marsala); padding-left: 10px; }
+        section { padding: 20px; background: #fafafa; border-radius: 8px; margin-bottom: 30px; border: 1px solid var(--prata-borda); }
+        .form-inline { display: flex; gap: 10px; margin-bottom: 15px; }
+        input, select { padding: 10px; border: 1px solid var(--prata-borda); border-radius: 6px; font-size: 1rem; }
+        button { background-color: var(--marsala); color: var(--branco); border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: var(--marsala-hover); }
+        button.btn-danger { background-color: #c0392b; color: white; }
+        button.btn-danger:hover { background-color: #962d22; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: var(--branco); }
+        th, td { border: 1px solid var(--prata-borda); padding: 12px; text-align: left; }
+        th { background-color: var(--prata-claro); color: var(--marsala); }
+        .lista-escolhas { padding-left: 20px; font-size: 0.9rem; }
+        .lista-escolhas li { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Painel de Controle dos Noivos</h1>
+        <p>Gerencie produtos, quantidades e confira quem comprou/confirmou</p>
+    </header>
+
+    <section>
+        <h2>Adicionar Novo Presente</h2>
+        <div class="form-inline">
+            <input type="text" id="novo-presente" placeholder="Ex: Jogo de Pratos Oxford" style="flex: 2;">
+            <input type="number" id="qtd-presente" value="1" min="1" style="width: 80px;">
+            <button onclick="adicionarPresente()">Cadastrar na Lista</button>
+        </div>
+    </section>
+
+    <section>
+        <h2>Relatório Geral de Presentes Escolhidos</h2>
+        <p style="font-size:0.9rem; color:#666; margin-bottom: 10px;">Aqui você edita os nomes, ajusta as quantidades totais ou remove itens.</p>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome do Presente</th>
+                        <th style="width: 100px;">Qtd Total</th>
+                        <th>Convidados que Escolheram (Nome, Telefone)</th>
+                        <th style="width: 100px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-presentes"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <section>
+        <h2>Relatório de Presença Geral (RSVP)</h2>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome do Convidado</th>
+                        <th>Telefone</th>
+                        <th>Confirmação</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-rsvp"></tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script>
+    let presentes = [];
+    let rsvps = [];
+
+    window.onload = function() {
+        atualizarPaineis();
+        // Atualiza caso você simule ações na aba do convidado
+        setInterval(atualizarPaineis, 2000);
+    };
+
+    function atualizarPaineis() {
+        presentes = JSON.parse(localStorage.getItem('presentes_casamento')) || [];
+        rsvps = JSON.parse(localStorage.getItem('rsvps_casamento')) || [];
+        renderizarTabelaPresentes();
+        renderizarTabelaRSVP();
+    }
+
+    function renderizarTabelaPresentes() {
+        const tbody = document.getElementById('tabela-presentes');
+        tbody.innerHTML = "";
+
+        presentes.forEach((item, indexFilho) => {
+            let listaHTML = "<ul class='lista-escolhas'>";
+            if(item.escolhas && item.escolhas.length > 0) {
+                item.escolhas.forEach((esc, indexEscolha) => {
+                    listaHTML += `
+                        <li>
+                            <strong>${esc.por}</strong> (${esc.telefone}) 
+                            <button onclick="removerEscolhaManual(${indexFilho}, ${indexEscolha})" style="background:none; border:none; color:#c0392b; cursor:pointer; font-size:0.8rem; margin-left:5px; padding:0; font-weight:bold;">[Excluir Convidado]</button>
+                        </li>`;
+                });
+            } else { 
+                listaHTML += "<li style='color:#999; list-style:none;'>Ninguém escolheu ainda</li>"; 
+            }
+            listaHTML += "</ul>";
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" value="${item.nome}" onchange="editarNomePresente(${indexFilho}, this.value)" style="width:100%;"></td>
+                <td><input type="number" value="${item.quantidade}" min="1" onchange="editarQtdPresente(${indexFilho}, this.value)" style="width:70px;"></td>
+                <td>${listaHTML}</td>
+                <td><button class="btn-danger" onclick="removerPresente(${indexFilho})">Excluir</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderizarTabelaRSVP() {
+        const tbody = document.getElementById('tabela-rsvp');
+        tbody.innerHTML = "";
+
+        rsvps.forEach((r, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" value="${r.nome}" onchange="editarRSVP(${index}, 'nome', this.value)" style="width:100%;"></td>
+                <td><input type="text" value="${r.telefone}" onchange="editarRSVP(${index}, 'telefone', this.value)" style="width:100%;"></td>
+                <td>
+                    <select onchange="editarRSVP(${index}, 'presenca', this.value)">
+                        <option value="Sim, com certeza!" ${r.presenca === 'Sim, com certeza!' ? 'selected' : ''}>Sim, com certeza!</option>
+                        <option value="Não poderei comparecer" ${r.presenca === 'Não poderei comparecer' ? 'selected' : ''}>Não poderei comparecer</option>
+                    </select>
+                </td>
+                <td><button class="btn-danger" onclick="removerRSVP(${index})">Remover</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function adicionarPresente() {
+        const nome = document.getElementById('novo-presente').value.trim();
+        const qtd = parseInt(document.getElementById('qtd-presente').value);
+        if(!nome || qtd < 1) return alert("Preencha o nome e uma quantidade válida!");
+
+        presentes.push({ id: Date.now(), nome: nome, quantidade: qtd, escolhas: [] });
+        localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+        
+        document.getElementById('novo-presente').value = "";
+        document.getElementById('qtd-presente').value = "1";
+        atualizarPaineis();
+    }
+
+    function editarNomePresente(index, valor) {
+        presentes[index].nome = valor;
+        localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+    }
+
+    function editarQtdPresente(index, valor) {
+        presentes[index].quantidade = parseInt(valor);
+        localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+        atualizarPaineis();
+    }
+
+    function removerPresente(index) {
+        if(confirm("Deseja remover esse presente e todas as suas reservas da lista?")) {
+            presentes.splice(index, 1);
+            localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+            atualizarPaineis();
+        }
+    }
+
+    function removerEscolhaManual(indexPresente, indexEscolha) {
+        if(confirm("Remover esse convidado deste presente? O item voltará a ficar disponível.")) {
+            presentes[indexPresente].escolhas.splice(indexEscolha, 1);
+            localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+            atualizarPaineis();
+        }
+    }
+
+    function editarRSVP(index, campo, valor) {
+        rsvps[index][campo] = valor;
+        localStorage.setItem('rsvps_casamento', JSON.stringify(rsvps));
+    }
+
+    function removerRSVP(index) {
+        if(confirm("Deseja remover essa confirmação de presença do relatório?")) {
+            rsvps.splice(index, 1);
+            localStorage.setItem('rsvps_casamento', JSON.stringify(rsvps));
+            atualizarPaineis();
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casamento Suzana & Marcos - Lista & RSVP</title>
+    <style>
+        :root {
+            --marsala: #800020; --marsala-hover: #5A0016; --branco: #ffffff;
+            --prata-claro: #f4f4f6; --prata-borda: #cccccc; --texto-escuro: #333333;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--prata-claro); color: var(--texto-escuro); padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: var(--branco); padding: 30px; border-radius: 12px; border: 1px solid var(--prata-borda); }
+        header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid var(--prata-claro); padding-bottom: 20px; }
+        header h1 { color: var(--marsala); font-size: 2.5rem; margin-bottom: 10px; }
+        h2 { color: var(--marsala); margin-bottom: 20px; border-left: 4px solid var(--marsala); padding-left: 10px; }
+        section { margin-bottom: 40px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; }
+        input, select { width: 100%; padding: 12px; border: 1px solid var(--prata-borda); border-radius: 6px; font-size: 1rem; }
+        button { background-color: var(--marsala); color: var(--branco); border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: var(--marsala-hover); }
+        .item-presente { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid var(--prata-claro); background: #fafafa; margin-bottom: 8px; border-radius: 6px; }
+        .qtd-badge { background: #eee; padding: 3px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; color: #555; }
+        .item-presente.indisponivel { background-color: #eaeaea; color: #999; text-decoration: line-through; }
+        .btn-indisponivel { background-color: #999999; cursor: not-allowed; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: var(--branco); padding: 30px; border-radius: 8px; width: 90%; max-width: 450px; position: relative; }
+        .fechar-modal { position: absolute; top: 10px; right: 15px; font-size: 1.5rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Suzana & Marcos</h1>
+        <p>Sejam bem-vindos ao nosso site de casamento!</p>
+    </header>
+
+    <section>
+        <h2>Confirmação de Presença (RSVP)</h2>
+        <form id="form-rsvp" onsubmit="salvarRSVP(event)">
+            <div class="form-group">
+                <label>Nome Completo</label>
+                <input type="text" id="nome-rsvp" required placeholder="Seu nome">
+            </div>
+            <div class="form-group">
+                <label>Telefone de Contato</label>
+                <input type="tel" id="tel-rsvp" required placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group">
+                <label>Você irá ao evento?</label>
+                <select id="presenca" required>
+                    <option value="Sim, com certeza!">Sim, com certeza!</option>
+                    <option value="Não poderei comparecer">Não poderei comparecer</option>
+                </select>
+            </div>
+            <button type="submit">Confirmar Presença</button>
+        </form>
+    </section>
+
+    <section>
+        <h2>Lista de Presentes Online</h2>
+        <ul class="lista-presentes" id="lista-container"></ul>
+    </section>
+</div>
+
+<div class="modal" id="modal-presente">
+    <div class="modal-content">
+        <span class="fechar-modal" onclick="fecharModal()">&times;</span>
+        <h3 style="color: var(--marsala); margin-bottom: 15px;">Confirmar Escolha</h3>
+        <p id="modal-texto-presente" style="margin-bottom: 15px; font-weight: bold;"></p>
+        <form id="form-escolha" onsubmit="confirmarReserva(event)">
+            <input type="hidden" id="modal-item-id">
+            <div class="form-group">
+                <label>Seu Nome</label>
+                <input type="text" id="nome-convidado" required placeholder="Digite seu nome">
+            </div>
+            <div class="form-group">
+                <label>Seu Telefone</label>
+                <input type="tel" id="tel-convidado" required placeholder="(00) 00000-0000">
+            </div>
+            <button type="submit" style="width: 100%;">Garantir este Presente</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let presentes = [];
+
+    window.onload = function() {
+        renderizarLista();
+    };
+
+    // ESCUTADOR AUTOMÁTICO DE MUDANÇAS: Atualiza a lista na hora se você mudar algo no admin.html
+    window.addEventListener('storage', function(event) {
+        if (event.key === 'presentes_casamento') {
+            renderizarLista();
+        }
+    });
+
+    function renderizarLista() {
+        presentes = JSON.parse(localStorage.getItem('presentes_casamento')) || [];
+        const container = document.getElementById('lista-container');
+        container.innerHTML = "";
+
+        if(presentes.length === 0) {
+            container.innerHTML = `<li style='color:#888; font-style:italic;'>A lista de presentes está vazia... Adicione itens no painel de administrador.</li>`;
+            return;
+        }
+
+        presentes.forEach(item => {
+            const totalReservado = item.escolhas ? item.escolhas.length : 0;
+            const disponiveis = item.quantidade - totalReservado;
+            const li = document.createElement('li');
+
+            if(disponiveis <= 0) {
+                li.className = "item-presente indisponivel";
+                li.innerHTML = `<span>${item.nome} <span class="qtd-badge">Esgotado</span></span><button class="btn-indisponivel" disabled>Indisponível</button>`;
+            } else {
+                li.className = "item-presente";
+                li.innerHTML = `<span>${item.nome} <span class="qtd-badge">Restam ${disponiveis}</span></span><button onclick="abrirModal(${item.id}, '${item.nome}')">Escolher</button>`;
+            }
+            container.appendChild(li);
+        });
+    }
+
+    function abrirModal(id, nome) {
+        document.getElementById('modal-presente').style.display = 'flex';
+        document.getElementById('modal-texto-presente').innerText = `Você escolher: ${nome}`;
+        document.getElementById('modal-item-id').value = id;
+    }
+
+    function fecharModal() {
+        document.getElementById('modal-presente').style.display = 'none';
+        document.getElementById('form-escolha').reset();
+    }
+
+    function confirmarReserva(event) {
+        event.preventDefault();
+        const id = parseInt(document.getElementById('modal-item-id').value);
+        const nomeConvidado = document.getElementById('nome-convidado').value.trim();
+        const telConvidado = document.getElementById('tel-convidado').value.trim();
+
+        presentes = JSON.parse(localStorage.getItem('presentes_casamento')) || [];
+        const itemIndex = presentes.findIndex(item => item.id === id);
+        
+        if(itemIndex !== -1) {
+            let item = presentes[itemIndex];
+            if(!item.escolhas) item.escolhas = [];
+            
+            const disponiveis = item.quantidade - item.escolhas.length;
+            if(disponiveis <= 0) {
+                alert("Ops! Alguém escolheu este presente segundos antes.");
+                fecharModal();
+                renderizarLista();
+                return;
+            }
+
+            item.escolhas.push({ por: nomeConvidado, telephone: telConvidado });
+            localStorage.setItem('presentes_casamento', JSON.stringify(presentes));
+            renderizarLista();
+            alert(`Obrigado ${nomeConvidado}! Presente reservado.`);
+            fecharModal();
+        }
+    }
+
+    function salvarRSVP(event) {
+        event.preventDefault();
+        const nome = document.getElementById('nome-rsvp').value.trim();
+        const telefone = document.getElementById('tel-rsvp').value.trim();
+        const presenca = document.getElementById('presenca').value;
+
+        let rsvps = JSON.parse(localStorage.getItem('rsvps_casamento')) || [];
+        rsvps.push({ nome, telefone, presenca });
+        localStorage.setItem('rsvps_casamento', JSON.stringify(rsvps));
+
+        alert("Presença confirmada!");
+        document.getElementById('form-rsvp').reset();
+    }
+</script>
+</body>
+</html>
